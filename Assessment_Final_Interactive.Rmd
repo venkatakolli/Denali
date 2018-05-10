@@ -1,0 +1,144 @@
+---
+title: "Test2"
+author: "Venkat Kolli"
+date: "May 9, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Load Libraries
+
+```{r libraries}
+##load any librarys you may need.  tidyverse has already been loaded here for you
+libraries <- c("tidyverse", "datasets", "PKNCA","plotly", "knitr")
+for (l in libraries) {
+  suppressPackageStartupMessages(library(l, character.only = TRUE))
+}
+```
+
+
+## Data 
+```{r DataLoad}
+data(Theoph)
+```
+
+```{r demographics}
+
+##please add any corresponding data cleanup as needed
+dm <- read.csv("dm.csv")
+dm<-rename(dm, Subject=SUBJECT, Sex=SEX)
+dm$Sex<-recode(dm$Sex, Male='M', Female='F')
+dm$Age<-gsub("[^0-9.]", "",dm$Age)
+dm$Age<-as.numeric(dm$Age)
+dm<-mutate(dm, Age_new=if_else(Age > 1000, Age/52, if_else(Age>100, Age/12, Age) ))
+```
+##Data Cleaning:
+
+The dm data comprised of three columns and 12 rows. Here the column titles were renamed to keep them consistent throughout this assessment. The Sex column values comprised of gender with two different styles of notations. The values in this column were recoded to maintain an uniform notation. The Age column values also consisted of multiple styles of representations. Here also, the values in age column were altered to maintain consistency.Prior to cleanup, One assumption was made for subject 6 that age was in months instead of years.
+
+##Characteriization of data by gender
+Prior to characterization, both datasets were joined into one after converting the subjects in dm dataset as factors. The resulting dataframe, data,column title for concentration was tweaked to match the rest of the titles.
+```{r summary}
+##input characterization and summary data code here.
+dm$Subject<-factor(dm$Subject)
+data<-left_join(Theoph, dm, by="Subject")
+data$Sex<-factor(data$Sex)
+data<-rename(data, Conc=conc)
+library(psych)
+describeBy(data, data$Sex)
+```
+##Summary of data:
+
+Summmary data based on gender stratification is shown in the above table. The statistical data for all the columns is displayed for each gender. For females, the dose and concentration of drug show negative skewness while for males, the age and concentration appear to be negatively skewed. For females, the average 
+weight is 72.83+/-7.97 mg, concentration is 4.37+/-2.48 mg/mL and for males, the average weight is 66.33+/-9.12 mg, concentration is 5.55+/-3.12 mg/mL
+```{r Characterization}
+library(ggplot2)
+#Plot for concentration versus time stratified by gender
+plot1<- ggplot(data, aes(Time, Conc))+geom_line(aes(line = Subject, color=Sex))+labs(x="Time (hr) ", y="Concentration (mg/mL)", title= "Concentration versus Time Plot")
+ggplotly(plot1, session="knitr")
+```
+
+A plot for concentration versus time with respect to subjects is shown above. Based on this plot, the males were administerd with higher concentrations than the females.Also, the time to attain maximum concentration is sligntly longer for males than females.
+## Visualization
+
+```{r Characterization by Gender}
+plot2<-ggplot(data, aes(x=Sex, y=Conc)) + geom_boxplot() +
+    stat_summary(fun.y=mean, geom="point", shape=5, size=4)+ labs(x="Sex", y="Concentration (mg/mL)", title= "Concentration versus Gender Plot")
+ggplotly(plot2)
+
+```
+The box plot shows the interquartile ranges for concentration of drug for both genders. The mean concentration (4.65 mg/mL) for females is slightly lower than the mean concentration (6.01) for males.
+
+```{r Gender Characterization by Age}
+plot3<-ggplot(data, aes(x=Sex, y=Age_new)) + geom_boxplot() +
+    stat_summary(fun.y=mean, geom="point", shape=5, size=4) + labs(x="Sex", y="Age", title= "Age versus Gender Plot")
+ggplotly(plot3)
+```
+In this box plot, simiilar to earlier plot, the interquartile range of age for both genders is shown. Here the range for female ages is higher than the range for male ages but still the mean (49.55) for male age is significantly higher than mean (42.95) female age.
+
+```{r Gender Characterization by weight}
+plot4<-ggplot(data, aes(x=Sex, y=Wt)) + geom_boxplot() +
+    stat_summary(fun.y=mean, geom="point", shape=5, size=4)+ labs(x="Sex", y="Weight (Kg)", title= "Weight versus Gender Plot")
+ggplotly(plot4)
+```
+The above plot represent the boxplots for weight for both genders. Here also similar to age versus gender plot, the female eights are highHere the diamond represents the mean value basaed upon the predicted variable.
+
+```{r Characterization of Conc by Dose}
+plot5<-ggplot(data, aes(x=Dose, y=Conc, group= Subject)) + geom_point() +
+    stat_summary(fun.y=mean, geom="point", shape=5, size=4)+ labs(x="Dose (mg) ", y="Concentration (mg/mL)", title= "Concentration versus Dose Plot")
+ggplotly(plot5)
+```
+The plot represents the concentration versus dose plot with the diamond representing the mean concentration values.Here we observed that for higher doses the maximum concentrations were comparitively higher. On the contrary, for dose around 4 mg, the maximum concentrations were significantly higher than the doses (>4.1 & <5.5) maximum concentrations. These could be due to the weight and gender of the subjects.
+
+```{r visualization}
+##input visualization code here
+p<-ggplot(data=data, aes(x=Time, y=Conc, colour=Sex)) +
+  geom_line() +
+  geom_point()+facet_wrap(Sex~Subject, nrow = 2)+ labs(x="Time (hr) ", y="Concentration (mg/mL)", title= "Concentration versus Time Stratified by Gender Plot")
+ggplotly(p)
+
+```
+The above figure shows individual plots for all the twelve subjects who are separated into two groups based on sex(red=Female, blue=Male). The concentrations for subjects mainly (1, 10, 12 & 5) are higher than 9 mg/L whereas for females theris only citing (Subject#9) of >=9 mg/L concentrations.
+
+## Analysis
+
+```{r AUC}
+##input code for estimating AUC here.
+conc_obj<-PKNCAconc(data, Conc~Time|Subject)
+dose_obj<-PKNCAdose(data, Dose~Time|Subject)
+data_obj<-PKNCAdata(data.conc = conc_obj, data.dose = dose_obj, intervals=data.frame(start=0, end=24, aucall=TRUE, auclast=FALSE, aucinf.pred=FALSE, aucinf.obs=FALSE))
+results_obj<-pk.nca(data_obj)
+kable(results_obj$result)
+```
+
+Here I used the PKNCA package to calculate the different area under the curve (AUC) values. The values for AUC(last) and AUC(all) for all the subjects were shown in the above table. These AUC values varied significantly from subject to subject. These AUC values were added to the dm table as shown below
+```{r AUC to df}
+AUC<-as.numeric(c(92.36, 67.23, 70.59, 72.84, 84.40, 71.70, 62.14, 62.78, 58.70, 135.58, 58.70, 85.03))
+dm<-cbind(dm, AUC)
+```
+
+```{r AUC plots}
+A<-ggplot(data=dm, aes(x=Subject, y=AUC, color=Sex)) +
+  geom_line() +
+  geom_point()+ labs(x="Subject", y="Area under Curve", title= "Area under Curve values versus Subjects Plot")
+ggplotly(A)
+```
+
+The above plot shows the AUC values for each subject and the red points represent the female subjects while the blue represent the male. The mean AUC values (89.57) for male is comparitively higher than the mean AUC values (64.10) for female. The significantly higher mean AUC values for male might be due to the higher AUC values for subject 10. When the AUC values for the subject 10 were omitted the mean AUC value for male is arounf 80.37, which is still significaantly higher. 
+```{r AUC vs weight}
+AUC_data<-left_join(Theoph, dm, by="Subject")
+plot8<-ggplot(AUC_data, aes(x=AUC, y=Dose, group= Subject)) + geom_point() +
+    labs(x="Area under Curve ", y="Dose (mg)", title= "AUC values versus Dose Plot")
+ggplotly(plot8)
+```
+Based on the above plot, the AUC values were higher when the dose were above 5mg except for one scenario when the dose was around 4 mg.  
+
+```{r Dose versus weight}
+plot9<-ggplot(AUC_data, aes(x=Wt, y=Dose, group=Subject))+geom_point()+labs(x="Weight", y="Dose", title= "Weight versus Dose plot")
+ggplotly(plot9)
+```
+
+In this plot, we can clearly observe that weight and dose are inversely related and these variabilities are to be taken into consideration for each subject. A linear plot can be generated and further help in providing the information about the right dosages based on weight subjects. Overall, since the sample size is small, we cannot expand this approach for larger sample sizes.
